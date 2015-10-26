@@ -2,6 +2,7 @@ let https = require('https');
 let statusCodes = require('http').STATUS_CODES;
 let urlParse = require('url').parse;
 let path = require('path');
+
 export function xhrNode(root, accessToken, githubHostname) {
     let cache = {};
     githubHostname = githubHostname || "https://api.github.com/";
@@ -10,10 +11,10 @@ export function xhrNode(root, accessToken, githubHostname) {
             callback = body;
             body = undefined;
         }
-        if (!callback)
-            return request.bind(this, accessToken, method, url, body);
+        if (!callback) return request.bind(this, accessToken, method, url, body);
         url = url.replace(":root", root);
-        let json;
+
+        let json: Buffer;
         let headers = {
             "User-Agent": "node.js"
         };
@@ -22,12 +23,8 @@ export function xhrNode(root, accessToken, githubHostname) {
         }
         if (body) {
             headers["Content-Type"] = "application/json";
-            try {
-                json = new Buffer(JSON.stringify(body));
-            }
-            catch (err) {
-                return callback(err);
-            }
+            try { json = new Buffer(JSON.stringify(body)); }
+            catch (err) { return callback(err); }
             headers["Content-Length"] = json.length;
         }
         if (method === "GET") {
@@ -36,6 +33,7 @@ export function xhrNode(root, accessToken, githubHostname) {
                 headers["If-None-Match"] = cached.etag;
             }
         }
+
         let urlparts = urlParse(githubHostname);
         let options = {
             hostname: urlparts.hostname,
@@ -43,15 +41,17 @@ export function xhrNode(root, accessToken, githubHostname) {
             method: method,
             headers: headers
         };
-        let req = https.request(options, function (res) {
-            let body = [];
-            res.on("data", function (chunk) {
+
+        let req = https.request(options, function(res) {
+            let body: any = [];
+            res.on("data", function(chunk) {
                 body.push(chunk);
             });
-            res.on("end", function () {
+            res.on("end", function() {
                 body = Buffer.concat(body).toString();
                 console.log(method, url, res.statusCode);
                 console.log("Rate limit %s/%s left", res.headers['x-ratelimit-remaining'], res.headers['x-ratelimit-limit']);
+                //console.log(body);
                 if (res.statusCode === 200 && method === "GET" && /\/refs\//.test(url)) {
                     cache[url] = {
                         body: body,
@@ -62,15 +62,14 @@ export function xhrNode(root, accessToken, githubHostname) {
                     body = cache[url].body;
                     res.statusCode = 200;
                 }
+                // Fake parts of the xhr object using node APIs
                 let xhr = {
                     status: res.statusCode,
                     statusText: res.statusCode + " " + statusCodes[res.statusCode]
                 };
                 let response = { message: body };
                 if (body) {
-                    try {
-                        response = JSON.parse(body);
-                    }
+                    try { response = JSON.parse(body); }
                     catch (err) { }
                 }
                 return callback(null, xhr, response);
@@ -79,5 +78,4 @@ export function xhrNode(root, accessToken, githubHostname) {
         req.end(json);
         req.on("error", callback);
     };
-}
-;
+};
